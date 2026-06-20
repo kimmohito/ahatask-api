@@ -5,6 +5,7 @@ namespace Database\Seeders;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use App\Models\Project;
 use App\Models\User;
+use App\Models\Organization;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Seeder;
 
@@ -29,13 +30,23 @@ class MassiveTaskSeeder extends Seeder
     $statuses = ['todo', 'doing', 'done'];
     $priorities = ['low', 'medium', 'high'];
 
-    for ($i = 0; $i < 1000000; $i += 1000) {
+    // map project id => slug
+    $projectSlugs = Project::pluck('slug', 'id')->toArray();
+    $orgSlugs = Organization::pluck('slug', 'id')->toArray();
+
+    for ($i = 0; $i < 1000; $i += 1000) {
         $batch = [];
 
         for ($j = 0; $j < 1000; $j++) {
+            $projectId = fake()->randomElement($projectIds);
+            $orgId = 1;
+
             $batch[] = [
-                'organization_id' => 1,
-                'project_id' => fake()->randomElement($projectIds), // ✅ FIX
+                'organization_id' => $orgId,
+                'organization_slug' => $orgSlugs[$orgId] ?? null,
+                'project_id' => $projectId,
+                'project_slug' => $projectSlugs[$projectId] ?? null,
+                'slug' => null,
                 'assignee_id' => fake()->randomElement($userIds),
                 'title' => fake()->sentence(),
                 'description' => fake()->paragraph(),
@@ -47,6 +58,19 @@ class MassiveTaskSeeder extends Seeder
         }
 
         DB::table('tasks')->insert($batch);
+    }
+    // Backfill slug for rows inserted via DB::table (bypass Eloquent events)
+    // Backfill per-project task_number and slugs for rows inserted via DB::table
+    $projects = Project::all();
+    foreach ($projects as $project) {
+        $tasks = DB::table('tasks')->where('project_id', $project->id)->orderBy('id')->get();
+        $n = 1;
+        $prefix = $project->project_prefix ?: $project->slug;
+        foreach ($tasks as $t) {
+            $val = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $prefix)) . '-' . $n;
+            DB::table('tasks')->where('id', $t->id)->update(['task_number' => $n, 'slug' => $val]);
+            $n++;
+        }
     }
 }
 }

@@ -10,51 +10,54 @@ class TaskController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Task::query()
-            ->with(['project', 'assignee']);
+        $user = $request->user();
 
-        // FILTERS
-        $query->when($request->status, fn($q) =>
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $query = Task::query()->with(['project', 'assignee']);
+
+        // FILTERS (SAFE)
+        $query->when($request->filled('status'), fn($q) =>
             $q->where('status', $request->status)
         );
 
-        $query->when($request->priority, fn($q) =>
+        $query->when($request->filled('priority'), fn($q) =>
             $q->where('priority', $request->priority)
         );
 
-        $query->when($request->assignee_id, fn($q) =>
+        $query->when($request->filled('assignee_id'), fn($q) =>
             $q->where('assignee_id', $request->assignee_id)
         );
 
-        $query->when($request->project_id, fn($q) =>
+        $query->when($request->filled('project_id'), fn($q) =>
             $q->where('project_id', $request->project_id)
         );
 
-        // DATE RANGE
-        $query->when($request->from, fn($q) =>
-            $q->whereDate('created_at', '>=', $request->from)
+        // DATE FILTER
+        $query->when($request->filled('from'), fn($q) =>
+            $q->where('created_at', '>=', $request->from)
         );
 
-        $query->when($request->to, fn($q) =>
-            $q->whereDate('created_at', '<=', $request->to)
+        $query->when($request->filled('to'), fn($q) =>
+            $q->where('created_at', '<=', $request->to)
         );
 
-        // SORTING
+        // SORT
         $sortBy = $request->get('sort_by', 'created_at');
         $sortDir = $request->get('sort_dir', 'desc');
 
         $query->orderBy($sortBy, $sortDir);
 
-        // PAGINATION SIZE (VERY IMPORTANT)
+        // PAGINATION
         $perPage = (int) $request->get('per_page', 10);
 
         if (!in_array($perPage, [5,10,20,50,100,1000])) {
             $perPage = 10;
         }
 
-        return response()->json(
-            $query->paginate($perPage)
-        );
+        return response()->json($query->paginate($perPage));
     }
 
     public function store(Request $request)
