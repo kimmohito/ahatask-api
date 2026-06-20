@@ -10,27 +10,10 @@ class TaskController extends Controller
     /**
      * Display a listing of the resource.
      */
-
-    public function index(Request $request, $projectId)
+    public function index()
     {
-        $query = Task::where('project_id', $projectId)
-            ->where('organization_id', auth()->user()->organization_id);
-
-        if ($request->status) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->assignee_id) {
-            $query->where('assignee_id', $request->assignee_id);
-        }
-
-        if ($request->sort === 'latest') {
-            $query->orderBy('created_at', 'desc');
-        }
-
-        return $query->paginate(20);
+        //
     }
-
 
     /**
      * Show the form for creating a new resource.
@@ -43,20 +26,9 @@ class TaskController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-
     public function store(Request $request)
     {
-        $this->authorize('create tasks');
-
-        $task = Task::create([
-            'project_id' => $request->project_id,
-            'organization_id' => auth()->user()->organization_id,
-            'title' => $request->title,
-            'description' => $request->description,
-            'status' => 'todo',
-        ]);
-
-        return $task;
+        //
     }
 
     /**

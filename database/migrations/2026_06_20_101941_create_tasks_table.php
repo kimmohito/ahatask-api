@@ -22,6 +22,8 @@ return new class extends Migration
 
             $table->string('status')->default('todo');
 
+            $table->string('priority')->default('medium');
+
             $table->foreignId('assignee_id')
                 ->nullable()
                 ->constrained('users')

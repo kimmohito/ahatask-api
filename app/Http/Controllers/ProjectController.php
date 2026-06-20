@@ -10,12 +10,10 @@ class ProjectController extends Controller
     /**
      * Display a listing of the resource.
      */
-
     public function index()
     {
-        return Project::where('organization_id', auth()->user()->organization_id)->get();
+        //
     }
-
 
     /**
      * Show the form for creating a new resource.
@@ -28,16 +26,9 @@ class ProjectController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-
     public function store(Request $request)
     {
-        $this->authorize('manage projects');
-
-        return Project::create([
-            'organization_id' => auth()->user()->organization_id,
-            'name' => $request->name,
-            'description' => $request->description,
-        ]);
+        //
     }
 
     /**

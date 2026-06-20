@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
@@ -14,13 +15,14 @@ Route::middleware(['auth:api', 'org'])->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    // Organizations
+    Route::apiResource('organizations', OrganizationController::class);
+
     // Projects
-    Route::get('/projects', [ProjectController::class, 'index']);
-    Route::post('/projects', [ProjectController::class, 'store'])->middleware('role:admin');
+    Route::apiResource('projects', ProjectController::class);
 
     // Tasks
-    Route::get('/projects/{id}/tasks', [TaskController::class, 'index']);
-    Route::post('/tasks', [TaskController::class, 'store']);
+    Route::apiResource('tasks', TaskController::class);
 
 });
 

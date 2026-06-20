@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Scopes\OrganizationScope;
+// use App\Policies\TaskPolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
@@ -25,6 +26,10 @@ class Task extends Model
         'status',
         'assignee_id',
     ];
+
+    // protected $policies = [
+    //     Task::class => TaskPolicy::class,
+    // ];
 
     public function getActivitylogOptions(): LogOptions
     {
