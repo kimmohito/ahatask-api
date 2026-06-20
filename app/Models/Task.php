@@ -114,4 +114,23 @@ class Task extends Model
             }
         });
     }
+    /**
+     * Resolve route binding for Task so routes can accept numeric IDs or slugs.
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        // if numeric, try ID first
+        if (is_numeric($value)) {
+            return $this->where('id', $value)->firstOrFail();
+        }
+
+        // try slug
+        $task = $this->where('slug', $value)->first();
+        if ($task) {
+            return $task;
+        }
+
+        // fallback: try primary key (may throw)
+        return $this->where('id', $value)->firstOrFail();
+    }
 }

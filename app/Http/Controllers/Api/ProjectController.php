@@ -10,7 +10,7 @@ class ProjectController extends Controller
 {
     public function index()
     {
-        return Project::with('tasks')->latest()->paginate(10);
+        return Project::with('organization')->latest()->paginate(10);
     }
 
     public function store(Request $request)
