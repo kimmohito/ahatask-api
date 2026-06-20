@@ -3,40 +3,79 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\User;
-use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
+use App\Models\User;
+use App\Models\Organization;
+use Illuminate\Support\Facades\Hash;
 
 class RoleAndPermissionSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Create roles ONLY (NO assignRole here)
-        Role::firstOrCreate([
-            'name' => 'superadmin',
-            'guard_name' => 'api',
-        ]);
+        // permissions
+        $permissions = [
+            'manage users',
+            'manage projects',
+            'create tasks',
+            'edit tasks',
+            'delete tasks',
+            'view tasks',
+        ];
 
-        Role::firstOrCreate([
+        foreach ($permissions as $perm) {
+            Permission::firstOrCreate([
+                'name' => $perm,
+                'guard_name' => 'api'
+            ]);
+        }
+
+        // roles
+        $admin = Role::firstOrCreate([
             'name' => 'admin',
-            'guard_name' => 'api',
+            'guard_name' => 'api'
         ]);
 
-        Role::firstOrCreate([
-            'name' => 'user',
-            'guard_name' => 'api',
+        $member = Role::firstOrCreate([
+            'name' => 'member',
+            'guard_name' => 'api'
         ]);
 
-        // 2. Create user
-        $kimmohito = User::firstOrCreate(
-            ['email' => 'kimmohito@gmail.com'],
+        // assign permissions
+        $admin->givePermissionTo($permissions);
+        $member->givePermissionTo([
+            'create tasks',
+            'edit tasks',
+            'view tasks'
+        ]);
+
+        // org
+        $org = Organization::firstOrCreate([
+            'name' => 'Default Org'
+        ]);
+
+        // admin user
+        $adminUser = User::firstOrCreate(
+            ['email' => 'admin@example.com'],
             [
-                'name' => 'Kim Mohito',
-                'password' => Hash::make('4thJune1996!'),
+                'name' => 'Admin User',
+                'password' => Hash::make('password'),
+                'organization_id' => $org->id
             ]
         );
 
-        // 3. Assign role TO USER (this is correct)
-        $kimmohito->assignRole('user');
+        $adminUser->assignRole('admin');
+
+        // member user
+        $memberUser = User::firstOrCreate(
+            ['email' => 'member@example.com'],
+            [
+                'name' => 'Member User',
+                'password' => Hash::make('password'),
+                'organization_id' => $org->id
+            ]
+        );
+
+        $memberUser->assignRole('member');
     }
 }
