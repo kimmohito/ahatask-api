@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Models\Scopes\OrganizationScope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class Task extends Model
 {
@@ -13,7 +15,7 @@ class Task extends Model
         static::addGlobalScope(new OrganizationScope());
     }
 
-    use HasFactory;
+    use HasFactory, LogsActivity;
 
     protected $fillable = [
         'project_id',
@@ -24,8 +26,12 @@ class Task extends Model
         'assignee_id',
     ];
 
-    public function activities()
+    public function getActivitylogOptions(): LogOptions
     {
-        return $this->hasMany(TaskActivity::class);
+        return LogOptions::defaults()
+            ->logOnly(['title', 'status'])
+            ->logOnlyDirty()
+            // ->dontSubmitEmptyLogs()
+            ->setDescriptionForEvent(fn(string $event) => "Task {$event}");
     }
 }
