@@ -6,18 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Http\Resources\TaskResource;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Redis;
 
 class TaskController extends Controller
 {
     public function index(Request $request)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        if (!$user) {
-            return response()->json(['message' => 'Unauthenticated'], 401);
-        }
+            if (!$user) {
+                return response()->json(['message' => 'Unauthenticated'], 401);
+            }
 
-        $query = Task::query()->with(['project', 'assignee', 'organization']);
+            $query = Task::query()->with(['project', 'assignee', 'organization']);
 
         // Organization / Project scoping (accept slugs or numeric ids)
         if ($request->filled('org')) {
@@ -107,9 +110,29 @@ class TaskController extends Controller
 
         $page = (int) $request->get('page', $request->get('current_page', 1));
 
-        $paginator = $query->paginate($perPage, ['*'], 'page', max(1, $page));
+        // Build a cache key from user and request parameters
+        $userId = $user->id ?? 'guest';
+        $cacheKey = 'tasks:index:' . $userId . ':' . md5(serialize([
+            'params' => $request->all(),
+            'per_page' => $perPage,
+            'page' => $page,
+        ]));
 
-        return TaskResource::collection($paginator);
+        $ttl = 60; // seconds
+
+        $result = $this->cacheRemember($cacheKey, $ttl, function () use ($query, $perPage, $page) {
+            $paginator = $query->paginate($perPage, ['*'], 'page', max(1, $page));
+            // Convert resource collection to array payload suitable for JSON caching
+            $data = TaskResource::collection($paginator)->response()->getData(true);
+            return $data;
+        });
+
+            return response()->json($result);
+        } catch (\Throwable $e) {
+            \Log::error('TaskController@index error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            $msg = config('app.debug') ? $e->getMessage() : 'Internal Server Error';
+            return response()->json(['message' => 'Server error', 'error' => $msg], 500);
+        }
     }
 
     public function store(Request $request)
@@ -122,6 +145,9 @@ class TaskController extends Controller
             'status' => $request->status ?? 'todo',
             'assignee_id' => $request->assignee_id,
         ]);
+
+        // Invalidate related caches
+        $this->flushTaskCaches();
 
         return new TaskResource($task->load(['assignee', 'project', 'organization']));
     }
@@ -137,13 +163,36 @@ class TaskController extends Controller
         $task->fill(array_filter($data, fn($v) => $v !== null));
         $task->save();
 
+        $this->flushTaskCaches();
         return new TaskResource($task->fresh());
     }
 
     public function destroy(Task $task)
     {
         $task->delete();
+        $this->flushTaskCaches();
         return response()->json([], 204);
+    }
+
+    private function flushTaskCaches()
+    {
+        try {
+            $redis = Redis::connection();
+            $patterns = [
+                'tasks:index:*',
+                'tasks:users:*',
+                'tasks:priorities:*',
+                'tasks:statuses:*',
+            ];
+            foreach ($patterns as $p) {
+                $keys = $redis->keys($p);
+                if (!empty($keys)) {
+                    $redis->del($keys);
+                }
+            }
+        } catch (\Exception $e) {
+            // ignore cache flush errors
+        }
     }
 
     /**
@@ -151,10 +200,15 @@ class TaskController extends Controller
      */
     public function statuses(Request $request)
     {
-        $list = Task::query()->distinct()->pluck('status')->filter()->values()->all();
-        if (empty($list)) {
-            $list = ['todo', 'grooming', 'in progress', 'done'];
-        }
+        $cacheKey = 'tasks:statuses:' . md5(serialize($request->all()));
+        $ttl = 60 * 5;
+        $list = $this->cacheRemember($cacheKey, $ttl, function () {
+            $list = Task::query()->distinct()->pluck('status')->filter()->values()->all();
+            if (empty($list)) {
+                $list = ['todo', 'grooming', 'in progress', 'done'];
+            }
+            return $list;
+        });
 
         return response()->json(['data' => $list]);
     }
@@ -164,10 +218,15 @@ class TaskController extends Controller
      */
     public function priorities(Request $request)
     {
-        $list = Task::query()->distinct()->pluck('priority')->filter()->values()->all();
-        if (empty($list)) {
-            $list = ['low', 'normal', 'high', 'urgent'];
-        }
+        $cacheKey = 'tasks:priorities:' . md5(serialize($request->all()));
+        $ttl = 60 * 5;
+        $list = $this->cacheRemember($cacheKey, $ttl, function () {
+            $list = Task::query()->distinct()->pluck('priority')->filter()->values()->all();
+            if (empty($list)) {
+                $list = ['low', 'normal', 'high', 'urgent'];
+            }
+            return $list;
+        });
 
         return response()->json(['data' => $list]);
     }
@@ -179,15 +238,59 @@ class TaskController extends Controller
     {
         $search = trim((string)($request->get('q') ?? $request->get('query') ?? $request->get('search') ?? ''));
 
+        $cacheKey = 'tasks:users:' . md5(serialize($request->all()));
+        $ttl = 60 * 5;
+
+        $cached = $this->cacheGet($cacheKey);
+        if ($cached !== null) {
+            return response()->json(['data' => $cached]);
+        }
+
+        $onlyAssignable = filter_var($request->get('only_assignable', false), FILTER_VALIDATE_BOOLEAN);
+        $projectParam = $request->get('project') ?? $request->get('project_id');
+
+        $userIds = null;
+
+        if ($projectParam) {
+            // try to resolve project id by slug or id
+            $projModel = null;
+            if (is_numeric($projectParam)) {
+                $projModel = \App\Models\Project::find((int)$projectParam);
+            } else {
+                $projModel = \App\Models\Project::where('slug', $projectParam)->first();
+            }
+
+            if ($projModel) {
+                // prefer project users pivot
+                $userIds = $projModel->users()->pluck('users.id')->unique()->filter()->values()->toArray();
+            } else {
+                // fallback: collect assignees from tasks in that project
+                $userIds = \Illuminate\Support\Facades\DB::table('tasks')
+                    ->when(!is_numeric($projectParam), fn($q) => $q->where('project_slug', $projectParam), fn($q) => $q->where('project_id', (int)$projectParam))
+                    ->whereNotNull('assignee_id')
+                    ->distinct()
+                    ->pluck('assignee_id')
+                    ->filter()
+                    ->values()
+                    ->toArray();
+            }
+        }
+
         $userQuery = \App\Models\User::query();
 
-        if ($request->filled('project')) {
-            $proj = $request->get('project');
-            $userQuery->whereIn('id', function ($q) use ($proj) {
-                $q->select('assignee_id')->from('tasks')
-                    ->when(!is_numeric($proj), fn($qq) => $qq->where('project_slug', $proj), fn($qq) => $qq->where('project_id', (int)$proj))
-                    ->whereNotNull('assignee_id');
-            });
+        if ($onlyAssignable) {
+            if ($userIds === null) {
+                // no project specified, nothing assignable
+                $out = [];
+                $this->cachePut($cacheKey, $out, $ttl);
+                return response()->json(['data' => $out]);
+            }
+            $userQuery->whereIn('id', $userIds);
+        } else {
+            // if project provided, prefer project users but allow broader search
+            if ($userIds !== null && !empty($userIds)) {
+                $userQuery->whereIn('id', $userIds);
+            }
         }
 
         if ($search !== '') {
@@ -200,8 +303,37 @@ class TaskController extends Controller
         $users = $userQuery->limit(200)->get(['id', 'name', 'email']);
 
         // normalize to simple objects expected by frontend
-        $out = $users->map(fn($u) => ['id' => $u->id, 'name' => $u->name ?? $u->email])->values();
+        $out = $users->map(fn($u) => ['id' => $u->id, 'name' => $u->name ?? $u->email])->values()->toArray();
+
+        $this->cachePut($cacheKey, $out, $ttl);
 
         return response()->json(['data' => $out]);
+    }
+
+    private function cacheRemember(string $key, $ttl, callable $fn)
+    {
+        try {
+            return Cache::store('redis')->remember($key, $ttl, $fn);
+        } catch (\Throwable $e) {
+            return Cache::remember($key, $ttl, $fn);
+        }
+    }
+
+    private function cacheGet(string $key)
+    {
+        try {
+            return Cache::store('redis')->get($key);
+        } catch (\Throwable $e) {
+            return Cache::get($key);
+        }
+    }
+
+    private function cachePut(string $key, $value, $ttl)
+    {
+        try {
+            Cache::store('redis')->put($key, $value, $ttl);
+        } catch (\Throwable $e) {
+            Cache::put($key, $value, $ttl);
+        }
     }
 }

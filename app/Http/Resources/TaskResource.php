@@ -14,8 +14,6 @@ class TaskResource extends JsonResource
      */
     public function toArray($request)
     {
-        $assignee = $this->whenLoaded('assignee');
-
         return [
             'id' => $this->id,
             'slug' => $this->slug,
@@ -26,11 +24,11 @@ class TaskResource extends JsonResource
             'status' => $this->status,
             'priority' => $this->priority,
             'assignee_id' => $this->assignee_id,
-            'assignee_name' => $this->when($this->assignee_id || $assignee, fn() => $assignee?->name ?? $this->assignee_name ?? null),
-            'assignee' => $assignee ? [
-                'id' => $assignee->id,
-                'name' => $assignee->name ?? $assignee->username ?? $assignee->email,
-            ] : null,
+            'assignee_name' => $this->assignee?->name ?? $this->assignee_name ?? null,
+            'assignee' => $this->whenLoaded('assignee', fn() => [
+                'id' => $this->assignee->id,
+                'name' => $this->assignee->name ?? $this->assignee->username ?? $this->assignee->email,
+            ], null),
             'project' => $this->whenLoaded('project', fn() => [
                 'id' => $this->project?->id,
                 'slug' => $this->project?->slug,

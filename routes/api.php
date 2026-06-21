@@ -28,6 +28,8 @@ Route::middleware(['auth:api', 'org'])->group(function () {
     Route::get('statuses', [TaskController::class, 'statuses']);
     Route::get('priorities', [TaskController::class, 'priorities']);
     Route::get('users', [TaskController::class, 'users']);
+    // Global search endpoint (alias to tasks index)
+    Route::get('search', [TaskController::class, 'index']);
 
 });
 
