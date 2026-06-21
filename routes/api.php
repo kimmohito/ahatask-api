@@ -24,5 +24,10 @@ Route::middleware(['auth:api', 'org'])->group(function () {
     // Tasks
     Route::apiResource('tasks', TaskController::class);
 
+    // Helper endpoints used by frontend
+    Route::get('statuses', [TaskController::class, 'statuses']);
+    Route::get('priorities', [TaskController::class, 'priorities']);
+    Route::get('users', [TaskController::class, 'users']);
+
 });
 
