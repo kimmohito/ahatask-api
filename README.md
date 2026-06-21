@@ -1,4 +1,4 @@
-Core Requiremen ts
+Core Requirements
 
 ## Data Model
 
