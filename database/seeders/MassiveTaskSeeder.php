@@ -41,13 +41,21 @@ class MassiveTaskSeeder extends Seeder
             $projectId = fake()->randomElement($projectIds);
             $orgId = 1;
 
+            // try to pick an assignee from project users if available
+            $projectUsers = DB::table('project_user')->where('project_id', $projectId)->pluck('user_id')->toArray();
+            if (!empty($projectUsers)) {
+                $assignee = fake()->randomElement($projectUsers);
+            } else {
+                $assignee = fake()->randomElement($userIds);
+            }
+
             $batch[] = [
                 'organization_id' => $orgId,
                 'organization_slug' => $orgSlugs[$orgId] ?? null,
                 'project_id' => $projectId,
                 'project_slug' => $projectSlugs[$projectId] ?? null,
                 'slug' => null,
-                'assignee_id' => fake()->randomElement($userIds),
+                'assignee_id' => $assignee,
                 'title' => fake()->sentence(),
                 'description' => fake()->paragraph(),
                 'status' => fake()->randomElement($statuses),

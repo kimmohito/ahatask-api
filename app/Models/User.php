@@ -55,6 +55,11 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 
+    public function projects()
+    {
+        return $this->belongsToMany(\App\Models\Project::class, 'project_user')->withTimestamps();
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

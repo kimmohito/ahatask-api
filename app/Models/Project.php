@@ -67,6 +67,11 @@ class Project extends Model
         return $this->hasMany(Task::class);
     }
 
+    public function users()
+    {
+        return $this->belongsToMany(\App\Models\User::class, 'project_user')->withTimestamps();
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
