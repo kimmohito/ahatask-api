@@ -29,6 +29,12 @@ class TaskResource extends JsonResource
                 'id' => $this->assignee->id,
                 'name' => $this->assignee->name ?? $this->assignee->username ?? $this->assignee->email,
             ], null),
+            'favorite_users' => $this->whenLoaded('favorites', fn() => $this->favorites
+                ->map(fn($user) => $user->name ?? $user->username ?? $user->email)
+                ->filter()
+                ->values()
+                ->all(), []),
+            'favorites_count' => $this->whenLoaded('favorites', fn() => $this->favorites->count(), 0),
             'project' => $this->whenLoaded('project', fn() => [
                 'id' => $this->project?->id,
                 'slug' => $this->project?->slug,

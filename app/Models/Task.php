@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 use App\Models\Project;
+use App\Models\TaskComment;
 use App\Models\User;
 use App\Models\Organization;
 
@@ -26,6 +27,7 @@ class Task extends Model
         'title',
         'description',
         'status',
+        'priority',
         'assignee_id',
     ];
 
@@ -55,6 +57,26 @@ class Task extends Model
     public function organization()
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function comments()
+    {
+        return $this->hasMany(TaskComment::class);
+    }
+
+    public function favorites()
+    {
+        return $this->belongsToMany(User::class, 'task_favorites')->withTimestamps();
+    }
+
+    public function bookmarks()
+    {
+        return $this->belongsToMany(User::class, 'task_bookmarks')->withTimestamps();
+    }
+
+    public function pins()
+    {
+        return $this->belongsToMany(User::class, 'task_pins')->withTimestamps();
     }
 
     protected static function booted()

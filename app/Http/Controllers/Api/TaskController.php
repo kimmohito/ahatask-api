@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Task;
+use App\Models\TaskComment;
 use App\Http\Resources\TaskResource;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Redis;
+use Spatie\Activitylog\Models\Activity;
 
 class TaskController extends Controller
 {
@@ -154,7 +157,177 @@ class TaskController extends Controller
 
     public function show(Task $task)
     {
-        return new TaskResource($task->load(['assignee', 'project', 'organization']));
+        return new TaskResource($task->load(['assignee', 'project', 'organization', 'favorites']));
+    }
+
+    public function history(Task $task)
+    {
+        $activities = Activity::query()
+            ->where('subject_type', Task::class)
+            ->where('subject_id', $task->id)
+            ->latest()
+            ->limit(100)
+            ->get();
+
+        $data = $activities->map(function (Activity $activity) {
+            $properties = $activity->properties ?? [];
+            if (is_string($properties)) {
+                $properties = json_decode($properties, true) ?: [];
+            }
+            if ($properties instanceof \Illuminate\Support\Collection) {
+                $properties = $properties->toArray();
+            }
+            if (!is_array($properties)) {
+                $properties = [];
+            }
+
+            $attributes = $properties['attributes'] ?? [];
+            $old = $properties['old'] ?? [];
+
+            $changes = [];
+            if (is_array($attributes)) {
+                foreach ($attributes as $field => $after) {
+                    $before = is_array($old) && array_key_exists($field, $old) ? $old[$field] : null;
+                    if ($before !== $after) {
+                        $changes[] = [
+                            'field' => (string) $field,
+                            'before' => $before,
+                            'after' => $after,
+                        ];
+                    }
+                }
+            }
+
+            $causerName = null;
+            if ($activity->causer && isset($activity->causer->name)) {
+                $causerName = $activity->causer->name;
+            }
+
+            return [
+                'description' => $activity->description ?? ($activity->event ? "Task {$activity->event}" : 'Task updated'),
+                'action' => $activity->event,
+                'created_at' => optional($activity->created_at)->toDateTimeString(),
+                'user_name' => $causerName,
+                'actor_name' => $causerName,
+                'changes' => $changes,
+                'source' => 'server',
+            ];
+        })->values();
+
+        return response()->json(['data' => $data]);
+    }
+
+    public function comments(Task $task)
+    {
+        $comments = TaskComment::query()
+            ->with('user:id,name,email')
+            ->where('task_id', $task->id)
+            ->latest()
+            ->limit(100)
+            ->get();
+
+        $data = $comments->map(function (TaskComment $comment) {
+            $name = $comment->user?->name ?? $comment->user?->email ?? 'Unknown user';
+
+            return [
+                'id' => $comment->id,
+                'body' => $comment->body,
+                'comment' => $comment->body,
+                'created_at' => optional($comment->created_at)->toDateTimeString(),
+                'user_name' => $name,
+                'actor_name' => $name,
+            ];
+        })->values();
+
+        return response()->json(['data' => $data]);
+    }
+
+    public function storeComment(Request $request, Task $task)
+    {
+        $payload = $request->validate([
+            'body' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $comment = TaskComment::create([
+            'task_id' => $task->id,
+            'organization_id' => $task->organization_id,
+            'user_id' => optional($request->user())->id,
+            'body' => trim($payload['body']),
+        ]);
+
+        $comment->load('user:id,name,email');
+        $name = $comment->user?->name ?? $comment->user?->email ?? 'Unknown user';
+
+        return response()->json([
+            'data' => [
+                'id' => $comment->id,
+                'body' => $comment->body,
+                'comment' => $comment->body,
+                'created_at' => optional($comment->created_at)->toDateTimeString(),
+                'user_name' => $name,
+                'actor_name' => $name,
+            ],
+        ], 201);
+    }
+
+    public function favorite(Request $request, Task $task)
+    {
+        $userId = optional($request->user())->id;
+        if (!$userId) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        DB::table('task_favorites')->updateOrInsert(
+            ['task_id' => $task->id, 'user_id' => $userId],
+            ['updated_at' => now(), 'created_at' => now()]
+        );
+
+        return response()->json([
+            'data' => [
+                'favorited' => true,
+                'favorite_users' => $this->favoriteUsersForTask($task),
+            ],
+        ]);
+    }
+
+    public function unfavorite(Request $request, Task $task)
+    {
+        $userId = optional($request->user())->id;
+        if (!$userId) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        DB::table('task_favorites')
+            ->where('task_id', $task->id)
+            ->where('user_id', $userId)
+            ->delete();
+
+        return response()->json([
+            'data' => [
+                'favorited' => false,
+                'favorite_users' => $this->favoriteUsersForTask($task),
+            ],
+        ]);
+    }
+
+    public function bookmark(Request $request, Task $task)
+    {
+        return $this->toggleTaskRelation($request, $task, 'task_bookmarks', true, 'bookmarked');
+    }
+
+    public function unbookmark(Request $request, Task $task)
+    {
+        return $this->toggleTaskRelation($request, $task, 'task_bookmarks', false, 'bookmarked');
+    }
+
+    public function pin(Request $request, Task $task)
+    {
+        return $this->toggleTaskRelation($request, $task, 'task_pins', true, 'pinned');
+    }
+
+    public function unpin(Request $request, Task $task)
+    {
+        return $this->toggleTaskRelation($request, $task, 'task_pins', false, 'pinned');
     }
 
     public function update(Request $request, Task $task)
@@ -335,5 +508,39 @@ class TaskController extends Controller
         } catch (\Throwable $e) {
             Cache::put($key, $value, $ttl);
         }
+    }
+
+    private function toggleTaskRelation(Request $request, Task $task, string $table, bool $enabled, string $key)
+    {
+        $userId = optional($request->user())->id;
+        if (!$userId) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        if ($enabled) {
+            DB::table($table)->updateOrInsert(
+                ['task_id' => $task->id, 'user_id' => $userId],
+                ['updated_at' => now(), 'created_at' => now()]
+            );
+        } else {
+            DB::table($table)
+                ->where('task_id', $task->id)
+                ->where('user_id', $userId)
+                ->delete();
+        }
+
+        return response()->json(['data' => [$key => $enabled]]);
+    }
+
+    private function favoriteUsersForTask(Task $task): array
+    {
+        return DB::table('task_favorites')
+            ->join('users', 'users.id', '=', 'task_favorites.user_id')
+            ->where('task_favorites.task_id', $task->id)
+            ->orderBy('users.name')
+            ->pluck('users.name')
+            ->filter()
+            ->values()
+            ->all();
     }
 }

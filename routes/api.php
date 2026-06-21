@@ -23,6 +23,15 @@ Route::middleware(['auth:api', 'org'])->group(function () {
 
     // Tasks
     Route::apiResource('tasks', TaskController::class);
+    Route::get('tasks/{task}/history', [TaskController::class, 'history']);
+    Route::get('tasks/{task}/comments', [TaskController::class, 'comments']);
+    Route::post('tasks/{task}/comments', [TaskController::class, 'storeComment']);
+    Route::post('tasks/{task}/favorite', [TaskController::class, 'favorite']);
+    Route::delete('tasks/{task}/favorite', [TaskController::class, 'unfavorite']);
+    Route::post('tasks/{task}/bookmark', [TaskController::class, 'bookmark']);
+    Route::delete('tasks/{task}/bookmark', [TaskController::class, 'unbookmark']);
+    Route::post('tasks/{task}/pin', [TaskController::class, 'pin']);
+    Route::delete('tasks/{task}/pin', [TaskController::class, 'unpin']);
 
     // Helper endpoints used by frontend
     Route::get('statuses', [TaskController::class, 'statuses']);
