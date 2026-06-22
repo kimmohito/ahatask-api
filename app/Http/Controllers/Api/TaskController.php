@@ -356,6 +356,7 @@ class TaskController extends Controller
                 'tasks:users:*',
                 'tasks:priorities:*',
                 'tasks:statuses:*',
+                'tasks:dashboard:*',
             ];
             foreach ($patterns as $p) {
                 $keys = $redis->keys($p);

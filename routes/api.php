@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TaskController;
@@ -37,6 +38,7 @@ Route::middleware(['auth:api', 'org'])->group(function () {
     Route::get('statuses', [TaskController::class, 'statuses']);
     Route::get('priorities', [TaskController::class, 'priorities']);
     Route::get('users', [TaskController::class, 'users']);
+    Route::get('dashboard', [DashboardController::class, 'overview']);
     // Global search endpoint (alias to tasks index)
     Route::get('search', [TaskController::class, 'index']);
 
