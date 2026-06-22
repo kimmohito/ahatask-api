@@ -12,9 +12,44 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Redis;
 use Spatie\Activitylog\Models\Activity;
+use OpenApi\Annotations as OA;
+use OpenApi\Attributes as OAAttr;
+
+/**
+ * @OA\Tag(name="Tasks", description="Task management")
+ */
 
 class TaskController extends Controller
 {
+    #[OAAttr\Get(
+        path: '/api/tasks',
+        tags: ['Tasks'],
+        summary: 'List tasks',
+        parameters: [
+            new OAAttr\Parameter(name: 'project', in: 'query', required: false, schema: new OAAttr\Schema(type: 'string')),
+            new OAAttr\Parameter(name: 'status', in: 'query', required: false, schema: new OAAttr\Schema(type: 'string')),
+            new OAAttr\Parameter(name: 'priority', in: 'query', required: false, schema: new OAAttr\Schema(type: 'string')),
+            new OAAttr\Parameter(name: 'assignee_id', in: 'query', required: false, schema: new OAAttr\Schema(type: 'integer')),
+            new OAAttr\Parameter(name: 'page', in: 'query', required: false, schema: new OAAttr\Schema(type: 'integer')),
+            new OAAttr\Parameter(name: 'per_page', in: 'query', required: false, schema: new OAAttr\Schema(type: 'integer')),
+        ],
+        responses: [new OAAttr\Response(response: 200, description: 'Paginated tasks')]
+    )]
+    /**
+     * @OA\Get(
+     *     path="/api/tasks",
+     *     tags={"Tasks"},
+     *     summary="List tasks",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="project", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="priority", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="assignee_id", in="query", required=false, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer")),
+     *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Paginated tasks")
+     * )
+     */
     public function index(Request $request)
     {
         try {
@@ -139,6 +174,40 @@ class TaskController extends Controller
         }
     }
 
+    #[OAAttr\Post(
+        path: '/api/tasks',
+        tags: ['Tasks'],
+        summary: 'Create a task',
+        requestBody: new OAAttr\RequestBody(
+            required: true,
+            content: new OAAttr\JsonContent(
+                required: ['project_id', 'title'],
+                properties: [
+                    new OAAttr\Property(property: 'project_id', type: 'integer', example: 1),
+                    new OAAttr\Property(property: 'title', type: 'string', example: 'Fix login'),
+                    new OAAttr\Property(property: 'description', type: 'string', example: 'Add better validation'),
+                    new OAAttr\Property(property: 'status', type: 'string', example: 'todo'),
+                    new OAAttr\Property(property: 'priority', type: 'string', example: 'high'),
+                    new OAAttr\Property(property: 'assignee_id', type: 'integer', example: 2),
+                ]
+            )
+        ),
+        responses: [
+            new OAAttr\Response(response: 201, description: 'Task created'),
+            new OAAttr\Response(response: 422, description: 'Validation error'),
+        ]
+    )]
+    /**
+     * @OA\Post(
+     *     path="/api/tasks",
+     *     tags={"Tasks"},
+     *     summary="Create a task",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"project_id","title"}, @OA\Property(property="project_id", type="integer", example=1), @OA\Property(property="title", type="string", example="Fix login"), @OA\Property(property="description", type="string", example="Add better validation"), @OA\Property(property="status", type="string", example="todo"), @OA\Property(property="priority", type="string", example="high"), @OA\Property(property="assignee_id", type="integer", example=2))),
+     *     @OA\Response(response=201, description="Task created"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
     public function store(StoreTaskRequest $request)
     {
         $validated = $request->validated();
@@ -159,11 +228,38 @@ class TaskController extends Controller
         return new TaskResource($task->load(['assignee', 'project', 'organization']));
     }
 
+    #[OAAttr\Get(
+        path: '/api/tasks/{task}',
+        tags: ['Tasks'],
+        summary: 'Get a task',
+        parameters: [new OAAttr\Parameter(name: 'task', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
+        responses: [new OAAttr\Response(response: 200, description: 'Task detail')]
+    )]
+    /**
+     * @OA\Get(
+     *     path="/api/tasks/{task}",
+     *     tags={"Tasks"},
+     *     summary="Get a task",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task detail")
+     * )
+     */
     public function show(Task $task)
     {
         return new TaskResource($task->load(['assignee', 'project', 'organization', 'favorites']));
     }
 
+    /**
+     * @OA\Get(
+     *     path="/api/tasks/{task}/history",
+     *     tags={"Tasks"},
+     *     summary="Get task history",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task history")
+     * )
+     */
     public function history(Task $task)
     {
         $activities = Activity::query()
@@ -221,6 +317,16 @@ class TaskController extends Controller
         return response()->json(['data' => $data]);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/api/tasks/{task}/comments",
+     *     tags={"Tasks"},
+     *     summary="List task comments",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task comments")
+     * )
+     */
     public function comments(Task $task)
     {
         $comments = TaskComment::query()
@@ -246,6 +352,17 @@ class TaskController extends Controller
         return response()->json(['data' => $data]);
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/tasks/{task}/comments",
+     *     tags={"Tasks"},
+     *     summary="Add a task comment",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(required={"body"}, @OA\Property(property="body", type="string", example="Looks good"))),
+     *     @OA\Response(response=201, description="Comment created")
+     * )
+     */
     public function storeComment(Request $request, Task $task)
     {
         $payload = $request->validate([
@@ -274,6 +391,16 @@ class TaskController extends Controller
         ], 201);
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/tasks/{task}/favorite",
+     *     tags={"Tasks"},
+     *     summary="Favorite a task",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task favorited")
+     * )
+     */
     public function favorite(Request $request, Task $task)
     {
         $userId = optional($request->user())->id;
@@ -294,6 +421,16 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/api/tasks/{task}/favorite",
+     *     tags={"Tasks"},
+     *     summary="Remove task favorite",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task unfavorited")
+     * )
+     */
     public function unfavorite(Request $request, Task $task)
     {
         $userId = optional($request->user())->id;
@@ -314,26 +451,96 @@ class TaskController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/tasks/{task}/bookmark",
+     *     tags={"Tasks"},
+     *     summary="Bookmark a task",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task bookmarked")
+     * )
+     */
     public function bookmark(Request $request, Task $task)
     {
         return $this->toggleTaskRelation($request, $task, 'task_bookmarks', true, 'bookmarked');
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/api/tasks/{task}/bookmark",
+     *     tags={"Tasks"},
+     *     summary="Remove task bookmark",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task bookmark removed")
+     * )
+     */
     public function unbookmark(Request $request, Task $task)
     {
         return $this->toggleTaskRelation($request, $task, 'task_bookmarks', false, 'bookmarked');
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/tasks/{task}/pin",
+     *     tags={"Tasks"},
+     *     summary="Pin a task",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task pinned")
+     * )
+     */
     public function pin(Request $request, Task $task)
     {
         return $this->toggleTaskRelation($request, $task, 'task_pins', true, 'pinned');
     }
 
+    /**
+     * @OA\Delete(
+     *     path="/api/tasks/{task}/pin",
+     *     tags={"Tasks"},
+     *     summary="Unpin a task",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Task unpinned")
+     * )
+     */
     public function unpin(Request $request, Task $task)
     {
         return $this->toggleTaskRelation($request, $task, 'task_pins', false, 'pinned');
     }
 
+    #[OAAttr\Put(
+        path: '/api/tasks/{task}',
+        tags: ['Tasks'],
+        summary: 'Update a task',
+        parameters: [new OAAttr\Parameter(name: 'task', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
+        requestBody: new OAAttr\RequestBody(
+            required: true,
+            content: new OAAttr\JsonContent(
+                properties: [
+                    new OAAttr\Property(property: 'title', type: 'string', example: 'Fix login'),
+                    new OAAttr\Property(property: 'description', type: 'string', example: 'Updated description'),
+                    new OAAttr\Property(property: 'status', type: 'string', example: 'doing'),
+                    new OAAttr\Property(property: 'priority', type: 'string', example: 'high'),
+                    new OAAttr\Property(property: 'assignee_id', type: 'integer', example: 2),
+                ]
+            )
+        ),
+        responses: [new OAAttr\Response(response: 200, description: 'Task updated')]
+    )]
+    /**
+     * @OA\Put(
+     *     path="/api/tasks/{task}",
+     *     tags={"Tasks"},
+     *     summary="Update a task",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(@OA\Property(property="title", type="string", example="Fix login"), @OA\Property(property="description", type="string", example="Updated description"), @OA\Property(property="status", type="string", example="doing"), @OA\Property(property="priority", type="string", example="high"), @OA\Property(property="assignee_id", type="integer", example=2))),
+     *     @OA\Response(response=200, description="Task updated")
+     * )
+     */
     public function update(Request $request, Task $task)
     {
         $data = $request->only(['title', 'description', 'status', 'assignee_id', 'priority']);
@@ -344,6 +551,23 @@ class TaskController extends Controller
         return new TaskResource($task->fresh());
     }
 
+    #[OAAttr\Delete(
+        path: '/api/tasks/{task}',
+        tags: ['Tasks'],
+        summary: 'Delete a task',
+        parameters: [new OAAttr\Parameter(name: 'task', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
+        responses: [new OAAttr\Response(response: 204, description: 'Task deleted')]
+    )]
+    /**
+     * @OA\Delete(
+     *     path="/api/tasks/{task}",
+     *     tags={"Tasks"},
+     *     summary="Delete a task",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=204, description="Task deleted")
+     * )
+     */
     public function destroy(Task $task)
     {
         $task->delete();
@@ -374,7 +598,13 @@ class TaskController extends Controller
     }
 
     /**
-     * Return available statuses. Derived from tasks or fallback defaults.
+     * @OA\Get(
+     *     path="/api/statuses",
+     *     tags={"Tasks"},
+     *     summary="Get available statuses",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Status list")
+     * )
      */
     public function statuses(Request $request)
     {
@@ -392,7 +622,13 @@ class TaskController extends Controller
     }
 
     /**
-     * Return available priorities. Derived from tasks or fallback defaults.
+     * @OA\Get(
+     *     path="/api/priorities",
+     *     tags={"Tasks"},
+     *     summary="Get available priorities",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(response=200, description="Priority list")
+     * )
      */
     public function priorities(Request $request)
     {
@@ -410,7 +646,15 @@ class TaskController extends Controller
     }
 
     /**
-     * Return users. If `project` is provided, return users assigned in that project first.
+     * @OA\Get(
+     *     path="/api/users",
+     *     tags={"Tasks"},
+     *     summary="Get assignable users",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="project", in="query", required=false, @OA\Schema(type="string")),
+     *     @OA\Parameter(name="only_assignable", in="query", required=false, @OA\Schema(type="boolean")),
+     *     @OA\Response(response=200, description="User list")
+     * )
      */
     public function users(Request $request)
     {

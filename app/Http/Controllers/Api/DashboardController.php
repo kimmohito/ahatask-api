@@ -8,9 +8,42 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use OpenApi\Annotations as OA;
+use OpenApi\Attributes as OAAttr;
+
+/**
+ * @OA\Tag(name="Dashboard", description="Organization dashboard overview")
+ */
 
 class DashboardController extends Controller
 {
+    #[OAAttr\Get(
+        path: '/api/dashboard',
+        tags: ['Dashboard'],
+        summary: 'Get dashboard overview',
+        parameters: [
+            new OAAttr\Parameter(name: 'priority_limit', in: 'query', required: false, schema: new OAAttr\Schema(type: 'integer', example: 6)),
+            new OAAttr\Parameter(name: 'due_limit', in: 'query', required: false, schema: new OAAttr\Schema(type: 'integer', example: 4)),
+            new OAAttr\Parameter(name: 'your_limit', in: 'query', required: false, schema: new OAAttr\Schema(type: 'integer', example: 10)),
+        ],
+        responses: [
+            new OAAttr\Response(response: 200, description: 'Dashboard data'),
+            new OAAttr\Response(response: 401, description: 'Unauthenticated'),
+        ]
+    )]
+    /**
+     * @OA\Get(
+     *     path="/api/dashboard",
+     *     tags={"Dashboard"},
+     *     summary="Get dashboard overview",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(name="priority_limit", in="query", required=false, @OA\Schema(type="integer", example=6)),
+     *     @OA\Parameter(name="due_limit", in="query", required=false, @OA\Schema(type="integer", example=4)),
+     *     @OA\Parameter(name="your_limit", in="query", required=false, @OA\Schema(type="integer", example=10)),
+     *     @OA\Response(response=200, description="Dashboard data"),
+     *     @OA\Response(response=401, description="Unauthenticated")
+     * )
+     */
     public function overview(Request $request)
     {
         $user = $request->user();
