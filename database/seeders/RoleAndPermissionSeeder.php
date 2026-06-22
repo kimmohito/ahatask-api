@@ -22,6 +22,7 @@ class RoleAndPermissionSeeder extends Seeder
         $permissions = [
             'manage users',
             'manage projects',
+            'manage organizations',
             'create tasks',
             'edit tasks',
             'delete tasks',
@@ -69,6 +70,7 @@ class RoleAndPermissionSeeder extends Seeder
         $admin->syncPermissions([
             'manage users',
             'manage projects',
+            'manage organizations',
             'create tasks',
             'edit tasks',
             'delete tasks',
