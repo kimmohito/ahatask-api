@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use OpenApi\Annotations as OA;
 use OpenApi\Attributes as OAAttr;
 
@@ -54,81 +56,101 @@ class DashboardController extends Controller
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
-        $cacheKey = 'tasks:dashboard:' . self::CACHE_VERSION . ':' . $user->id . ':' . md5(serialize($request->all()));
-        $ttl = 60;
+        $emptyPayload = $this->emptyOverviewPayload($user->id);
 
-        $payload = $this->cacheRemember($cacheKey, $ttl, function () use ($request, $user) {
-            $priorityLimit = max(1, min(50, (int) $request->get('priority_limit', 6)));
-            $dueLimit = max(1, min(50, (int) $request->get('due_limit', 4)));
-            $yourLimit = max(1, min(50, (int) $request->get('your_limit', 10)));
+        if (!Schema::hasTable('tasks')) {
+            return response()->json([
+                'data' => $emptyPayload,
+                'warning' => 'Dashboard is running without the tasks table. Run database migrations to enable task data.',
+            ]);
+        }
 
-            $summary = $this->summaryCounts($request);
+        try {
+            $cacheKey = 'tasks:dashboard:' . self::CACHE_VERSION . ':' . $user->id . ':' . md5(serialize($request->all()));
+            $ttl = 60;
 
-            $priorityTasks = $this->baseQuery($request)
-                ->whereIn('priority', ['urgent', 'high', 'medium'])
-                ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END")
-                ->orderByDesc('updated_at')
-                ->limit($priorityLimit)
-                ->get();
+            $payload = $this->cacheRemember($cacheKey, $ttl, function () use ($request, $user) {
+                $priorityLimit = max(1, min(50, (int) $request->get('priority_limit', 6)));
+                $dueLimit = max(1, min(50, (int) $request->get('due_limit', 4)));
+                $yourLimit = max(1, min(50, (int) $request->get('your_limit', 10)));
 
-            if ($priorityTasks->isEmpty()) {
+                $summary = $this->summaryCounts($request);
+
                 $priorityTasks = $this->baseQuery($request)
+                    ->whereIn('priority', ['urgent', 'high', 'medium'])
+                    ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END")
                     ->orderByDesc('updated_at')
                     ->limit($priorityLimit)
                     ->get();
-            }
 
-            $dueTasks = $this->baseQuery($request)
-                ->whereIn('status', ['todo', 'open', 'grooming', 'backlog', 'doing', 'in progress', 'in_progress'])
-                ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END")
-                ->orderBy('created_at')
-                ->limit($dueLimit)
-                ->get();
+                if ($priorityTasks->isEmpty()) {
+                    $priorityTasks = $this->baseQuery($request)
+                        ->orderByDesc('updated_at')
+                        ->limit($priorityLimit)
+                        ->get();
+                }
 
-            if ($dueTasks->isEmpty()) {
                 $dueTasks = $this->baseQuery($request)
+                    ->whereIn('status', ['todo', 'open', 'grooming', 'backlog', 'doing', 'in progress', 'in_progress'])
+                    ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END")
                     ->orderBy('created_at')
                     ->limit($dueLimit)
                     ->get();
-            }
 
-            $yourTasks = $this->baseQuery($request)
-                ->where('assignee_id', $user->id)
-                ->whereNotIn('status', ['done', 'completed', 'complete'])
-                ->orderByDesc('updated_at')
-                ->limit($yourLimit)
-                ->get();
+                if ($dueTasks->isEmpty()) {
+                    $dueTasks = $this->baseQuery($request)
+                        ->orderBy('created_at')
+                        ->limit($dueLimit)
+                        ->get();
+                }
 
-            if ($yourTasks->isEmpty()) {
                 $yourTasks = $this->baseQuery($request)
                     ->where('assignee_id', $user->id)
+                    ->whereNotIn('status', ['done', 'completed', 'complete'])
                     ->orderByDesc('updated_at')
                     ->limit($yourLimit)
                     ->get();
+
+                if ($yourTasks->isEmpty()) {
+                    $yourTasks = $this->baseQuery($request)
+                        ->where('assignee_id', $user->id)
+                        ->orderByDesc('updated_at')
+                        ->limit($yourLimit)
+                        ->get();
+                }
+
+                $activity = $this->weeklyActivity($request);
+
+                return [
+                    'summary' => $summary,
+                    'task_groups' => [
+                        'top_priority_tasks' => $priorityTasks->map(fn(Task $task) => $this->toTaskCard($task, 'High priority'))->values(),
+                        'due_tasks' => $dueTasks->map(fn(Task $task) => $this->toTaskCard($task, 'Due soon'))->values(),
+                        'your_tasks' => $yourTasks->map(fn(Task $task) => $this->toTaskCard($task, 'Assigned to you'))->values(),
+                    ],
+                    'activity' => $activity,
+                    'overview' => [
+                        'total_owned' => $this->baseQuery($request)->where('assignee_id', $user->id)->count(),
+                        'total_all' => $summary['total_tasks'],
+                        'by_status' => [
+                            'todo' => $summary['todo'],
+                            'in_progress' => $summary['in_progress'],
+                            'completed' => $summary['completed'],
+                            'other' => max(0, $summary['total_tasks'] - ($summary['todo'] + $summary['in_progress'] + $summary['completed'])),
+                        ],
+                    ],
+                ];
+            });
+        } catch (QueryException $e) {
+            if ($this->isMissingTasksTableException($e)) {
+                return response()->json([
+                    'data' => $emptyPayload,
+                    'warning' => 'Dashboard could not load task data because the tasks table is missing in this database.',
+                ]);
             }
 
-            $activity = $this->weeklyActivity($request);
-
-            return [
-                'summary' => $summary,
-                'task_groups' => [
-                    'top_priority_tasks' => $priorityTasks->map(fn(Task $task) => $this->toTaskCard($task, 'High priority'))->values(),
-                    'due_tasks' => $dueTasks->map(fn(Task $task) => $this->toTaskCard($task, 'Due soon'))->values(),
-                    'your_tasks' => $yourTasks->map(fn(Task $task) => $this->toTaskCard($task, 'Assigned to you'))->values(),
-                ],
-                'activity' => $activity,
-                'overview' => [
-                    'total_owned' => $this->baseQuery($request)->where('assignee_id', $user->id)->count(),
-                    'total_all' => $summary['total_tasks'],
-                    'by_status' => [
-                        'todo' => $summary['todo'],
-                        'in_progress' => $summary['in_progress'],
-                        'completed' => $summary['completed'],
-                        'other' => max(0, $summary['total_tasks'] - ($summary['todo'] + $summary['in_progress'] + $summary['completed'])),
-                    ],
-                ],
-            ];
-        });
+            throw $e;
+        }
 
         return response()->json(['data' => $payload]);
     }
@@ -269,5 +291,50 @@ class DashboardController extends Controller
         } catch (\Throwable $e) {
             return Cache::remember($key, $ttl, $fn);
         }
+    }
+
+    private function emptyOverviewPayload(int $userId): array
+    {
+        return [
+            'summary' => [
+                'total_tasks' => 0,
+                'todo' => 0,
+                'in_progress' => 0,
+                'completed' => 0,
+            ],
+            'task_groups' => [
+                'top_priority_tasks' => [],
+                'due_tasks' => [],
+                'your_tasks' => [],
+            ],
+            'activity' => [
+                'labels' => [],
+                'users' => [],
+                'total_completed_this_week' => 0,
+            ],
+            'overview' => [
+                'total_owned' => 0,
+                'total_all' => 0,
+                'by_status' => [
+                    'todo' => 0,
+                    'in_progress' => 0,
+                    'completed' => 0,
+                    'other' => 0,
+                ],
+            ],
+            'context' => [
+                'user_id' => $userId,
+                'schema_ready' => false,
+            ],
+        ];
+    }
+
+    private function isMissingTasksTableException(QueryException $e): bool
+    {
+        $message = $e->getMessage();
+
+        return str_contains($message, "Table 'ahatask.tasks' doesn't exist")
+            || str_contains($message, "Base table or view not found: 1146 Table 'ahatask.tasks' doesn't exist")
+            || str_contains($message, "tasks doesn't exist");
     }
 }
