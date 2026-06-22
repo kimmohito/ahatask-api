@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\TaskComment;
 use App\Http\Resources\TaskResource;
+use App\Http\Requests\StoreTaskRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -138,15 +139,18 @@ class TaskController extends Controller
         }
     }
 
-    public function store(Request $request)
+    public function store(StoreTaskRequest $request)
     {
+        $validated = $request->validated();
+
         $task = Task::create([
             'organization_id' => $request->user()->organization_id,
-            'project_id' => $request->project_id,
-            'title' => $request->title,
-            'description' => $request->description,
-            'status' => $request->status ?? 'todo',
-            'assignee_id' => $request->assignee_id,
+            'project_id' => $validated['project_id'],
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'status' => $validated['status'] ?? 'todo',
+            'priority' => $validated['priority'] ?? null,
+            'assignee_id' => $validated['assignee_id'] ?? null,
         ]);
 
         // Invalidate related caches
