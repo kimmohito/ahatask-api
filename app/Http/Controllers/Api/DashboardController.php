@@ -17,10 +17,13 @@ use OpenApi\Attributes as OAAttr;
 
 class DashboardController extends Controller
 {
+    private const CACHE_VERSION = 'v2';
+
     #[OAAttr\Get(
         path: '/api/dashboard',
         tags: ['Dashboard'],
         summary: 'Get dashboard overview',
+        security: [['bearerAuth' => []]],
         parameters: [
             new OAAttr\Parameter(name: 'priority_limit', in: 'query', required: false, schema: new OAAttr\Schema(type: 'integer', example: 6)),
             new OAAttr\Parameter(name: 'due_limit', in: 'query', required: false, schema: new OAAttr\Schema(type: 'integer', example: 4)),
@@ -51,7 +54,7 @@ class DashboardController extends Controller
             return response()->json(['message' => 'Unauthenticated'], 401);
         }
 
-        $cacheKey = 'tasks:dashboard:' . $user->id . ':' . md5(serialize($request->all()));
+        $cacheKey = 'tasks:dashboard:' . self::CACHE_VERSION . ':' . $user->id . ':' . md5(serialize($request->all()));
         $ttl = 60;
 
         $payload = $this->cacheRemember($cacheKey, $ttl, function () use ($request, $user) {
@@ -62,18 +65,32 @@ class DashboardController extends Controller
             $summary = $this->summaryCounts($request);
 
             $priorityTasks = $this->baseQuery($request)
-                ->whereIn('priority', ['urgent', 'high'])
-                ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 ELSE 2 END")
+                ->whereIn('priority', ['urgent', 'high', 'medium'])
+                ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END")
                 ->orderByDesc('updated_at')
                 ->limit($priorityLimit)
                 ->get();
 
+            if ($priorityTasks->isEmpty()) {
+                $priorityTasks = $this->baseQuery($request)
+                    ->orderByDesc('updated_at')
+                    ->limit($priorityLimit)
+                    ->get();
+            }
+
             $dueTasks = $this->baseQuery($request)
-                ->whereIn('status', ['todo', 'grooming', 'in progress', 'in_progress'])
+                ->whereIn('status', ['todo', 'open', 'grooming', 'backlog', 'doing', 'in progress', 'in_progress'])
                 ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END")
                 ->orderBy('created_at')
                 ->limit($dueLimit)
                 ->get();
+
+            if ($dueTasks->isEmpty()) {
+                $dueTasks = $this->baseQuery($request)
+                    ->orderBy('created_at')
+                    ->limit($dueLimit)
+                    ->get();
+            }
 
             $yourTasks = $this->baseQuery($request)
                 ->where('assignee_id', $user->id)
@@ -81,6 +98,14 @@ class DashboardController extends Controller
                 ->orderByDesc('updated_at')
                 ->limit($yourLimit)
                 ->get();
+
+            if ($yourTasks->isEmpty()) {
+                $yourTasks = $this->baseQuery($request)
+                    ->where('assignee_id', $user->id)
+                    ->orderByDesc('updated_at')
+                    ->limit($yourLimit)
+                    ->get();
+            }
 
             $activity = $this->weeklyActivity($request);
 
@@ -134,7 +159,7 @@ class DashboardController extends Controller
 
         return [
             'total_tasks' => (clone $query)->count(),
-            'todo' => (clone $query)->whereIn('status', ['todo', 'grooming', 'backlog'])->count(),
+            'todo' => (clone $query)->whereIn('status', ['todo', 'open', 'grooming', 'backlog'])->count(),
             'in_progress' => (clone $query)->whereIn('status', ['in progress', 'in_progress', 'doing', 'progress'])->count(),
             'completed' => (clone $query)->whereIn('status', ['done', 'completed', 'complete'])->count(),
         ];
@@ -210,6 +235,10 @@ class DashboardController extends Controller
         }
 
         if (in_array($value, ['todo', 'grooming', 'backlog'], true)) {
+            return 'todo';
+        }
+
+        if ($value === 'open') {
             return 'todo';
         }
 

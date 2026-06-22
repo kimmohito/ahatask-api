@@ -18,6 +18,7 @@ class ProjectController extends Controller
         path: '/api/projects',
         tags: ['Projects'],
         summary: 'List projects',
+        security: [['bearerAuth' => []]],
         parameters: [
             new OAAttr\Parameter(name: 'with_members', in: 'query', required: false, schema: new OAAttr\Schema(type: 'boolean')),
         ],
@@ -63,6 +64,7 @@ class ProjectController extends Controller
         path: '/api/projects',
         tags: ['Projects'],
         summary: 'Create a project',
+        security: [['bearerAuth' => []]],
         requestBody: new OAAttr\RequestBody(
             required: true,
             content: new OAAttr\JsonContent(
@@ -100,6 +102,7 @@ class ProjectController extends Controller
         path: '/api/projects/{project}',
         tags: ['Projects'],
         summary: 'Get a project',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'project', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         responses: [new OAAttr\Response(response: 200, description: 'Project detail')]
     )]
@@ -122,6 +125,7 @@ class ProjectController extends Controller
         path: '/api/projects/{project}',
         tags: ['Projects'],
         summary: 'Update a project',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'project', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         requestBody: new OAAttr\RequestBody(
             required: true,
@@ -156,6 +160,7 @@ class ProjectController extends Controller
         path: '/api/projects/{project}',
         tags: ['Projects'],
         summary: 'Delete a project',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'project', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         responses: [new OAAttr\Response(response: 204, description: 'Project deleted')]
     )]

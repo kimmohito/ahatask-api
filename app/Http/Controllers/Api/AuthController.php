@@ -116,6 +116,16 @@ class AuthController extends Controller
      *     @OA\Response(response=401, description="Unauthenticated")
      * )
      */
+    #[OAAttr\Get(
+        path: '/api/me',
+        tags: ['Auth'],
+        summary: 'Get the authenticated user',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OAAttr\Response(response: 200, description: 'Authenticated user'),
+            new OAAttr\Response(response: 401, description: 'Unauthenticated'),
+        ]
+    )]
     public function me()
     {
         return response()->json(auth()->user());
@@ -130,6 +140,13 @@ class AuthController extends Controller
      *     @OA\Response(response=200, description="Logged out")
      * )
      */
+    #[OAAttr\Post(
+        path: '/api/logout',
+        tags: ['Auth'],
+        summary: 'Invalidate the current token',
+        security: [['bearerAuth' => []]],
+        responses: [new OAAttr\Response(response: 200, description: 'Logged out')]
+    )]
     public function logout()
     {
         JWTAuth::invalidate(JWTAuth::getToken());

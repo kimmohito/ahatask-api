@@ -25,6 +25,7 @@ class TaskController extends Controller
         path: '/api/tasks',
         tags: ['Tasks'],
         summary: 'List tasks',
+        security: [['bearerAuth' => []]],
         parameters: [
             new OAAttr\Parameter(name: 'project', in: 'query', required: false, schema: new OAAttr\Schema(type: 'string')),
             new OAAttr\Parameter(name: 'status', in: 'query', required: false, schema: new OAAttr\Schema(type: 'string')),
@@ -178,6 +179,7 @@ class TaskController extends Controller
         path: '/api/tasks',
         tags: ['Tasks'],
         summary: 'Create a task',
+        security: [['bearerAuth' => []]],
         requestBody: new OAAttr\RequestBody(
             required: true,
             content: new OAAttr\JsonContent(
@@ -232,6 +234,7 @@ class TaskController extends Controller
         path: '/api/tasks/{task}',
         tags: ['Tasks'],
         summary: 'Get a task',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'task', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         responses: [new OAAttr\Response(response: 200, description: 'Task detail')]
     )]
@@ -515,6 +518,7 @@ class TaskController extends Controller
         path: '/api/tasks/{task}',
         tags: ['Tasks'],
         summary: 'Update a task',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'task', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         requestBody: new OAAttr\RequestBody(
             required: true,
@@ -555,6 +559,7 @@ class TaskController extends Controller
         path: '/api/tasks/{task}',
         tags: ['Tasks'],
         summary: 'Delete a task',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'task', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         responses: [new OAAttr\Response(response: 204, description: 'Task deleted')]
     )]

@@ -18,6 +18,7 @@ class OrganizationController extends Controller
         path: '/api/organizations',
         tags: ['Organizations'],
         summary: 'List organizations',
+        security: [['bearerAuth' => []]],
         responses: [new OAAttr\Response(response: 200, description: 'Organizations list')]
     )]
     /**
@@ -38,6 +39,7 @@ class OrganizationController extends Controller
         path: '/api/organizations',
         tags: ['Organizations'],
         summary: 'Create an organization',
+        security: [['bearerAuth' => []]],
         requestBody: new OAAttr\RequestBody(
             required: true,
             content: new OAAttr\JsonContent(
@@ -75,6 +77,7 @@ class OrganizationController extends Controller
         path: '/api/organizations/{organization}',
         tags: ['Organizations'],
         summary: 'Get an organization',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'organization', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         responses: [new OAAttr\Response(response: 200, description: 'Organization detail')]
     )]
@@ -97,6 +100,7 @@ class OrganizationController extends Controller
         path: '/api/organizations/{organization}',
         tags: ['Organizations'],
         summary: 'Update an organization',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'organization', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         requestBody: new OAAttr\RequestBody(
             required: true,
@@ -128,6 +132,7 @@ class OrganizationController extends Controller
         path: '/api/organizations/{organization}',
         tags: ['Organizations'],
         summary: 'Delete an organization',
+        security: [['bearerAuth' => []]],
         parameters: [new OAAttr\Parameter(name: 'organization', in: 'path', required: true, schema: new OAAttr\Schema(type: 'string'))],
         responses: [new OAAttr\Response(response: 204, description: 'Organization deleted')]
     )]
