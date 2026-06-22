@@ -19,23 +19,15 @@ class CrossOrganizationAccessSeeder extends Seeder
         $orgA = Organization::firstOrCreate(['name' => 'QA Org A']);
         $orgB = Organization::firstOrCreate(['name' => 'QA Org B']);
 
-        $userA = User::firstOrCreate(
-            ['email' => 'qa-org-a@example.com'],
-            [
-                'name' => 'QA User Org A',
-                'password' => Hash::make('password'),
-            ]
-        );
+        $userA = User::firstOrNew(['email' => 'qa-org-a@example.com']);
+        $userA->name = 'QA User Org A';
+        $userA->password = Hash::make('password');
         $userA->organization_id = $orgA->id;
         $userA->save();
 
-        $userB = User::firstOrCreate(
-            ['email' => 'qa-org-b@example.com'],
-            [
-                'name' => 'QA User Org B',
-                'password' => Hash::make('password'),
-            ]
-        );
+        $userB = User::firstOrNew(['email' => 'qa-org-b@example.com']);
+        $userB->name = 'QA User Org B';
+        $userB->password = Hash::make('password');
         $userB->organization_id = $orgB->id;
         $userB->save();
 
