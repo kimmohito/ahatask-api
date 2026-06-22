@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             ProjectUserSeeder::class,
             MassiveTaskSeeder::class,
             CrossOrganizationAccessSeeder::class,
+            TaskCommentSeeder::class,
         ]);
     }
 }
