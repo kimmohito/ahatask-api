@@ -11,7 +11,7 @@ use Illuminate\Database\Seeder;
 
 class MassiveTaskSeeder extends Seeder
 {
-    private const TOTAL_TASKS = 1000000;
+    private const TOTAL_TASKS = 100000;
     private const BATCH_SIZE = 1000;
 
     /**
